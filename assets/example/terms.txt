@@ -1,0 +1,3 @@
+# 본문에 꼭 나와야 할 용어
+inventory
+waterfall

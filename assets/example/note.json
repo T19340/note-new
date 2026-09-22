@@ -1,0 +1,10 @@
+{
+  "skill_assets": "..",
+  "head_extra": "head_extra.html",
+  "parts": ["p0.html", "p1.html"],
+  "panel": "panel.html",
+  "spy": "spy.js",
+  "data": "data.json",
+  "figures": ["figs.js"],
+  "out": "out.html"
+}

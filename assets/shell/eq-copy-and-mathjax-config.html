@@ -1,0 +1,32 @@
+<script>
+/* ── 수식: data-tex → 렌더 + 클릭 복사 ── */
+function showToast(){
+  var t=document.getElementById('toast');
+  t.style.opacity='1'; clearTimeout(t._tmo);
+  t._tmo=setTimeout(function(){t.style.opacity='0';},1300);
+}
+function fallbackCopy(text){
+  var ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.top='-1000px';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+}
+function copyTeX(el){
+  var tex=el.getAttribute('data-tex');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(tex).then(showToast,function(){fallbackCopy(tex);showToast();});
+  }else{fallbackCopy(tex);showToast();}
+}
+document.querySelectorAll('.eq').forEach(function(el){
+  el.textContent='\\['+el.getAttribute('data-tex')+'\\]';
+  el.addEventListener('click',function(){copyTeX(el);});
+  el.title='클릭하면 LaTeX 소스가 복사됩니다';
+});
+document.querySelectorAll('.eqi').forEach(function(el){
+  el.textContent='\\('+el.getAttribute('data-tex')+'\\)';
+  el.addEventListener('click',function(){copyTeX(el);});
+  el.title='클릭하면 LaTeX 소스가 복사됩니다';
+});
+</script>
+<script>window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};</script>

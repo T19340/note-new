@@ -1,0 +1,21 @@
+<div class="part"><div class="pn">Part 1</div><h2>재고</h2><p>최소 예제입니다.</p></div>
+<h3 class="sec" id="s11"><span class="sn">1.1</span> 재고의 이월</h3>
+<p class="lead-q">기말 재고는 어떻게 나올까요?</p>
+<div class="eq" data-tex="\text{End} = \text{Begin} + \text{In} - \text{Out}"></div>
+<p>기초 0잔에서 1,200잔이 들어오고 40잔을 쏟으면 기말은 1,160잔입니다.</p>
+<figure class="ifig"><div class="figtag">그림 1 · 재고 다리</div>
+<div class="lead2"><div><b>묻는 것</b>어느 항목이 재고를 줄였는가</div><div><b>볼 것</b>빨강 막대가 줄이는 항목인 것</div></div>
+<div class="body"><canvas id="c-f1" data-h="240"></canvas><div class="sub">단위: 잔</div></div>
+<div class="readout" id="r-f1"></div>
+<figcaption><b>기초 0 + 1,200 − 40 = 기말 1,160잔입니다.</b></figcaption></figure>
+<h3 class="sec" id="s12"><span class="sn">1.2</span> 판매 금액</h3>
+<p class="lead-q">한 잔 4.5달러면 매출은 얼마일까요?</p>
+<p>판 잔 수를 <span class="eqi" data-tex="q"></span>, 한 잔 값을 <span class="eqi" data-tex="p"></span>라 하면 매출은 <span class="eqi" data-tex="pq"></span>입니다. 인라인 수식도 클릭하면 LaTeX이 복사됩니다.</p>
+<div class="eq" data-tex="\text{Revenue} = p \times q = 4.5 \times 1{,}200 = 5{,}400"></div>
+<figure class="ifig"><div class="figtag">그림 2 · 판정 연습</div>
+<div class="lead2"><div><b>묻는 것</b>이 항목은 재고를 늘리는가 줄이는가</div><div><b>볼 것</b>카드를 고르고 답을 누르면 이유가 나오는 것</div></div>
+<div class="qgrid" id="q-f2"></div>
+<div class="ctrls"><div class="ctrl"><label>답</label><div class="choices"><button class="btn" data-a="up">늘림</button><button class="btn" data-a="down">줄임</button></div></div><button class="btn" id="f2-reset">처음부터</button></div>
+<div class="fb" id="fb-f2">카드를 하나 고르세요.</div>
+<div class="readout" id="r-f2"></div>
+<figcaption><b>판매는 재고를 줄이고 매입은 늘립니다.</b></figcaption></figure>

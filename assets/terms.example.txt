@@ -1,0 +1,22 @@
+# 본문에 반드시 등장해야 할 용어 (gate_struct.py의 두 번째 인자)
+#
+# 빈 줄과 '#'로 시작하는 줄은 무시한다. 한 줄에 용어 하나.
+# 조립한 HTML의 텍스트에 그 문자열이 없으면 구조 게이트가 실패로 잡는다.
+#
+# 무엇을 넣나. 이 노트가 다루기로 한 주제 중 "쓰다 보면 빠뜨리기 쉬운 것"을 넣는다.
+# 강의계획서나 교재 목차에 있는데 노트에서 빠질 수 있는 개념, 시험에 나오는데
+# 설명할 자리가 애매해 밀리는 용어, 영어 병기를 약속해 놓고 한 군데만 빠뜨리는 용어.
+# 이미 확실히 쓴 용어를 넣어 봐야 게이트가 늘 통과하므로 아무것도 지켜 주지 않는다.
+#
+# 아래는 회계 입문 노트에서 실제로 쓴 목록이다. 새 노트에서는 전부 지우고 다시 쓴다.
+
+IFRS
+IASB
+GAAP
+ASPE
+going concern
+accrual
+performance obligation
+retained earnings
+contributed capital
+statement of changes in equity

@@ -1,0 +1,15 @@
+[
+  {"query": "note-new로 「이항분포」 강의노트 하나 만들어줘", "should_trigger": true},
+  {"query": "note-new 스킬 써서 미적분 연쇄법칙 노트 만들어 줄래?", "should_trigger": true},
+  {"query": "저번에 만든 회계 노트랑 같은 양식으로 4강 노트도 만들어줘", "should_trigger": true},
+  {"query": "지난번 3강 노트 만든 그 양식 그대로, 4강 노트 이어서 만들어줘", "should_trigger": true},
+  {"query": "게이트까지 돌리는 그 강의노트 양식으로 이번엔 베이즈 정리 노트 만들어줘", "should_trigger": true},
+  {"query": "통계 폴더 자료로 학생용 강의노트를 note-new 양식으로 만들어줘", "should_trigger": true},
+
+  {"query": "강의노트 하나 만들어줘", "should_trigger": false},
+  {"query": "이 내용 좀 정리해줘", "should_trigger": false},
+  {"query": "이 논문 읽고 해부 노트 만들어줘", "should_trigger": false},
+  {"query": "발표용 슬라이드 다섯 장만 만들어줘", "should_trigger": false},
+  {"query": "이 파이썬 코드 리뷰해줘", "should_trigger": false},
+  {"query": "오늘 회의 내용 요약해서 메모로 남겨줘", "should_trigger": false}
+]

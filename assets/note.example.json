@@ -1,0 +1,20 @@
+{
+  "_": "note-new 조립 매니페스트. 노트 소스 폴더에 note.json으로 복사해 쓴다. 경로는 이 파일 기준 상대경로.",
+  "skill_assets": "<스킬 경로>/assets   (예제처럼 assets 안에서 쓰면 \"..\")",
+  "head_extra": "head_extra.html",
+  "parts": [
+    "p0.html",
+    "p1.html",
+    "p2.html",
+    "p3.html",
+    "p4.html",
+    "p5.html"
+  ],
+  "panel": "panel.html",
+  "spy": "spy.js",
+  "data": "data.json",
+  "figures": [
+    "figs.js"
+  ],
+  "out": "out.html"
+}
