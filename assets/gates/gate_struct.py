@@ -69,7 +69,25 @@ ok(rate >= 0.9, f'수식 클릭-복사 적용률 {rate:.0%} '
                 f'(복사 가능 {clickable} · 직접 쓴 수식 {raw}) — 본문 수식은 '
                 f'<div class="eq" data-tex="…"></div> / <span class="eqi" data-tex="…"></span>로 쓴다')
 
-print(f'섹션 {len(secs)} · 그림 {len(nums)} · id {len(ids)} · 수식 복사 {rate:.0%}')
+# 해설 분량. 계산만 적은 해설은 답안지이지 해설이 아니다(references/content.md §6).
+# 길다고 좋은 해설은 아니지만, **짧은 해설은 거의 언제나 답만 적은 것**이라 여기서 지목한다.
+sol = []
+for d in re.findall(r'(?is)<details\b[^>]*>(.*?)</details>', body):
+    t = re.sub(r'(?is)<table\b.*?</table>', ' ', d)          # 표는 답이지 해설이 아니다
+    t = re.sub(r'data-tex="[^"]*"', ' ', t)
+    t = re.sub(r'(?s)\\\[.*?\\\]|\\\(.*?\\\)', ' ', t)
+    t = re.sub(r'<[^>]+>', ' ', t)
+    sol.append(len(re.findall(r'[가-힣]', t)))
+if sol:
+    thin = [n for n in sol if n < 100]
+    sol_msg = f'해설 {len(sol)}개 · 한글 산문 중앙값 {sorted(sol)[len(sol) // 2]}자'
+    ok(len(thin) <= len(sol) // 4,
+       f'{sol_msg} — 100자 미만이 {len(thin)}개({len(thin) * 100 // len(sol)}%). '
+       f'계산만 적고 "무엇을 보고 이 방법을 골랐는지"가 빠졌을 수 있다. content.md §6의 다섯 층 확인')
+else:
+    sol_msg = '해설 0개'
+
+print(f'섹션 {len(secs)} · 그림 {len(nums)} · id {len(ids)} · 수식 복사 {rate:.0%} · {sol_msg}')
 print('FAILS:', len(fails))
 for f in fails: print('  ✗', f)
 sys.exit(1 if fails else 0)
