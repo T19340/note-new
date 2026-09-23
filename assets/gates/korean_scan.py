@@ -117,6 +117,18 @@ JUDGE = [
          r'(문제|경우|상황|방법)[가이]\s*있습니다'),
     ], None),
 
+    # 개념이 있는 자리에 일상 비유가 앉으면 독자는 뜻을 고를 수 없다. 실측: 부제의 "서로
+    # 얽혀 있어도"가 "서로 독립이 아니어도"를 뜻했는데, 같은 노트 본문은 '독립'을 아홉 번
+    # 제대로 쓰고 있었다. 한 노트가 같은 것을 두 이름으로 부른 셈이다(`content.md` §11).
+    ('개념 자리에 들어온 일상어', [
+        ('얽히다·엮이다 — 가리키는 개념의 이름을 대라(독립이 아님·종속·상관 등)',
+         r'얽[히혀힌힘힐]|엮[이여인]|뒤엉|맞물[리려린]'),
+        ('"서로 영향을 주다 / 따라 움직이다 / 붙어 다니다" — 같은 자리',
+         r'서로\s*영향|따라\s*움직|붙어\s*다니|딸려\s*(가|다니)'),
+        ('"…와 상관없이" — 통계의 상관(correlation)과 부딪힌다. "관계없이"로',
+         r'상관\s*(없|않)'),
+    ], None),
+
     ('번역투·분열문·비유', [
         ('"…것뿐입니다 / …이 전부입니다"', r'(것|일)뿐입니다|(의|이|가) 전부입니다'),
         ('분열문 "바로 …" / "다름 아닌"', r'바로 (그|이|여기|그것|이것)|다름 아닌'),
@@ -270,6 +282,33 @@ def heading_echo(blocks):
     return out
 
 
+# 일상어에도 있어서 학생이 아는 뜻으로 읽고 지나가는 낱말들. 처음 쓰는 자리에서 원어를
+# 밝히고 일상 뜻과 어디가 다른지 적어야 한다(`content.md` §11).
+OVERLAP = ['독립', '상관', '기댓값', '정규', '유의', '신뢰구간', '표본', '수렴', '조건부',
+           '모수', '분산', '편향', '효용', '한계', '탄력성', '수요', '자산', '부채', '자본',
+           '수익', '비용', '발생주의', '감가상각']
+
+
+def term_gloss(blocks, extra=()):
+    """개념어가 처음 나오는 자리에 원어가 붙어 있는지 본다.
+
+    한국어 술어만 주면 학생이 교재·강의·시험지의 영어와 잇지 못한다. 시험이 영어로 나오는
+    과목이면 그대로 실점이다. 겹침 낱말(OVERLAP)은 더 위험하다 — 학생이 이미 아는 일상 뜻으로
+    읽고 넘어가므로, 처음 보는 용어보다 조용히 틀린다."""
+    want = [w for w in list(OVERLAP) + [x for x in extra if x] if w]
+    out, seen = [], set()
+    for kind, t in blocks:
+        for w in want:
+            if w in seen or w not in t:
+                continue
+            seen.add(w)
+            i = t.index(w)
+            # 원어는 그 낱말 바로 뒤 괄호에 붙인다. 같은 문장 안이면 붙은 것으로 본다.
+            if not re.search(r'[(（][^)）]*[A-Za-z]{3}', t[i:i + 60]):
+                out.append((w, t[max(0, i - 24):i + 56]))
+    return out
+
+
 def word_churn(blocks, times=3):
     """한 문단 안에서 같은 실질 낱말이 세 번 이상 나오면 문장이 제자리를 도는 신호다."""
     out = []
@@ -287,7 +326,20 @@ def word_churn(blocks, times=3):
     return out
 
 
-def run(fn, judged):
+def read_terms(path):
+    """이 노트의 핵심 용어 목록. 구조 게이트가 쓰는 파일을 그대로 본다 — 용어를 두 곳에
+    적게 하면 한쪽만 고쳐진다."""
+    if not path or not os.path.exists(path):
+        return []
+    out = []
+    for ln in io.open(path, encoding='utf-8'):
+        ln = re.sub(r'#.*', '', ln).strip()
+        if ln and re.search(r'[가-힣]', ln):
+            out.append(ln.split()[0])
+    return out
+
+
+def run(fn, judged, terms=()):
     raw = io.open(fn, encoding='utf-8', errors='replace').read()
     blocks = blocks_of(raw)
     sents = [x for _, t in blocks for x in split_sents(t)]
@@ -365,6 +417,14 @@ def run(fn, judged):
             nj += 1
             judged.append((LV, f'절 제목 「{head}」을 되풀이', first))
             print(f'         「{head}」 {share:.0%}  «{first}»')
+    gloss = term_gloss(blocks, terms)
+    if gloss:
+        print(f'     ▸ 원어를 밝히지 않은 개념어 — {len(gloss)}건 (처음 쓰는 자리에 괄호로 붙입니다)')
+        for w, ctx in gloss[:6]:
+            print(f'         «{w}»  …{ctx}…')
+        for w, ctx in gloss:
+            nj += 1
+            judged.append(('개념어 · 원어 병기', f"'{w}' 처음 쓰는 자리", ctx))
     churn = word_churn(blocks)
     if churn:
         print(f'     ▸ 한 문단에 같은 낱말 3회 이상 — {len(churn)}건 (문장이 제자리를 도는 신호)')
@@ -405,6 +465,12 @@ def selftest():
     if not title_echo('<h1>제목 자리</h1><p class="subtitle">제목 자리를 다룹니다.</p>'):
         bad += 1
         print('  ✗ 부제 검사가 알려진 결함을 못 잡습니다 — 선택자나 정규식이 깨졌습니다')
+    if term_gloss([('p', '사건이 서로 독립이면 곱으로 나눕니다.')]) == []:
+        bad += 1
+        print('  ✗ 원어 병기 검사가 알려진 결함을 못 잡습니다')
+    if term_gloss([('p', '사건이 서로 독립(independent)이면 곱으로 나눕니다.')]) != []:
+        bad += 1
+        print('  ✗ 원어 병기 검사가 정상까지 잡습니다')
     if not any(re.search(p, '막힌 자리의 정체는 적분이었습니다') for p, _ in HARD):
         bad += 1
         print('  ✗ HARD 규칙이 알려진 결함을 못 잡습니다')
@@ -456,8 +522,17 @@ if __name__ == '__main__':
     if bad:
         print(f'자체 시험 실패 {bad}건 — 검사기가 깨졌습니다. 결과를 믿지 마십시오.\n')
 
+    # 용어 파일은 지정하지 않으면 검사 대상 옆에서 찾는다.
+    if '--terms' in sys.argv:
+        i = sys.argv.index('--terms')
+        tf = sys.argv[i + 1] if len(sys.argv) > i + 1 else ''
+        args = [a for a in args if a != tf]
+    else:
+        tf = os.path.join(os.path.dirname(os.path.abspath(args[0])), 'terms.txt') if args else ''
+    terms = read_terms(tf)
+
     judged = []
-    bad += sum(run(f, judged) for f in args)
+    bad += sum(run(f, judged, terms) for f in args)
 
     if tpath:
         blank, total = triage(tpath, judged)

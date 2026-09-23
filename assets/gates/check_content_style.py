@@ -391,8 +391,13 @@ def lint(path: Path):
     all_no_src = strip_src(visible)
     hard = {
         "번역체·AI 결함": check_aiche(all_no_src),
-        "원전 인용 3층": check_quote_triad(content),
     }
+    # 원전 인용 3층은 **논문 정독 노트**의 규칙이다(paper-study에서 함께 넘어온 검사).
+    # 강의노트는 원문 인용 박스가 없는 것이 정상이므로, .src를 쓰는 노트에 한해서만 본다.
+    # 이 검사를 납품 게이트에 넣자마자 강의노트가 이 규칙 하나로 막혔다 — 도구를 빌려 올 때는
+    # 딸려 온 규칙이 이 스킬의 것인지 따로 확인한다.
+    if 'class="src"' in content:
+        hard["원전 인용 3층"] = check_quote_triad(content)
     soft = {
         "register 혼재(권고)": check_register_mix(no_src),
         "취향: 은유·감정부사·자기지시(권고)": check_taste(all_no_src),

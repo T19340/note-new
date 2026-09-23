@@ -8,11 +8,16 @@ usage: python gate_deliver.py <조립된.html> [--src <소스폴더>]
 상으로는 존재하지 않는 단계였다. 그래서 사냥 패스에 흔적을 강제하고, 그 흔적이 **지금 조립한
 파일과 짝이 맞는지**까지 본다. 본문을 고치면 기록이 낡아 다시 돌려야 한다.
 
-검사하는 것
-  1. 구조 게이트 통과              gate_struct.py
-  2. 문체 HARD 0 + 판정 전량 기록  korean_scan.py --triage (문장의 수준도 이 층에 있다)
-  3. 사냥 패스 기록 hunt.md 존재   유형 ②③④에 각각 적힌 내용이 있을 것
-  4. 그 기록이 현재 빌드의 것      hunt.md의 build 해시 == 지금 파일의 해시
+검사하는 것 — 전부, 매번, 조립본 전체를 대상으로 돈다. 골라 돌리는 선택지는 없다.
+  1. 구조                          gate_struct.py
+  2. 문체 HARD 0 + 판정 전량 기록  korean_scan.py --triage
+                                   (문장의 수준 · 개념어와 원어 병기도 이 층에 있다)
+  3. 읽는 순서                     gate_order.py
+  3b. 번역투·AI 말투               check_content_style.py
+  3c. 수식 파손                    texscan.py
+  3d. 수치                         소스 폴더의 gate_numbers.py (없으면 실패)
+  4. 사냥 패스 기록 hunt.md 존재   유형 ②③④⑫⑬에 각각 적힌 내용이 있을 것
+  5. 그 기록이 현재 빌드의 것      hunt.md의 build 해시 == 지금 파일의 해시
 """
 import hashlib, io, os, re, subprocess, sys
 sys.stdout.reconfigure(encoding='utf-8')
@@ -20,7 +25,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 정규식으로 표현할 수 없어 읽어야만 드러나는 유형들. 번호는 `hunt-pass.md`의 유형 번호다.
 HUNT_TYPES = [('②', '지워도 되는 문장'), ('③', '글쓴이만 아는 은어'),
-              ('④', '쓸데없이 쪼갠 문장'), ('⑫', '문장의 수준')]
+              ('④', '쓸데없이 쪼갠 문장'), ('⑫', '문장의 수준'),
+              ('⑬', '개념어 자리에 들어온 일상어')]
 
 TEMPLATE = """# 사냥 패스 기록
 
@@ -51,6 +57,18 @@ file: {f}
 수준이 떨어지는 자리는 정해져 있다 — 내용을 다 쓴 뒤에 채우는 칸이다. 그 칸들만 모아
 한 번 더 읽고, 문단의 첫 문장만 위에서 아래로 죽 읽어 본다. 이어 읽을 때는 흐름에 묻혀
 지나가는 빈 문장이 첫 문장만 모아 놓으면 드러난다.
+
+## ⑬ 개념어 자리에 들어온 일상어
+
+어려운 용어를 피해 주려고 일상어로 바꾸면, 뜻이 넓어서 독자가 무엇을 가리키는지 고를 수
+없다. 쉽게 써 준 것이 아니라 해독을 시킨 것이다. 셋을 본다.
+
+  1. 개념이 있는 자리에 비유가 앉아 있지 않은가 — 얽히다·맞물리다·서로 영향을 주다
+  2. 개념어의 원어가 처음 나오는 자리에 있는가 — 독립(independent)
+  3. 일상어에도 있는 낱말을 정의 없이 쓰지 않았는가 — 독립·상관·기대·정규·유의·표본
+
+한 노트가 같은 개념을 두 이름으로 부르고 있지 않은지 함께 본다. 실제로 부제는 '얽힘',
+본문은 '독립이 아님'으로 부르고 있었고, 독자는 둘이 같은 것인 줄 알 길이 없었다.
 """
 
 
@@ -93,6 +111,29 @@ def main():
     rc, out = run('gate_order.py', [note])
     for l in out.strip().splitlines()[:6]: print('   ' + l.strip()[:110])
     if rc: fails.append('앞선 언급이 있습니다 — 독자가 되돌아가야 하는 자리를 없애십시오')
+
+    # 아래 셋은 오래 "돌리면 좋은 것"으로만 적혀 있었다. 압박이 오면 그런 단계는 빠지므로
+    # 납품 게이트 안으로 옮긴다. 검사는 전부, 매번, 조립본 전체를 대상으로 돈다.
+    print('── 3b. 번역투·AI 말투 (하드)')
+    rc, out = run('check_content_style.py', [note])
+    print('   ' + (out.strip().splitlines() or [''])[-1][:110])
+    if rc: fails.append('번역체·AI 어투 하드 위반이 남아 있습니다')
+
+    print('── 3c. 수식 파손')
+    rc, out = run('texscan.py', [note])
+    print('   ' + (out.strip().splitlines() or [''])[-1][:110])
+    if '(이상 없음)' not in out: fails.append('수식이 조용히 깨진 자리가 있습니다')
+
+    gn = os.path.join(src, 'gate_numbers.py')
+    if os.path.exists(gn):
+        print('── 3d. 수치')
+        r = subprocess.run([sys.executable, gn, note], capture_output=True,
+                           cwd=src, env=dict(os.environ, PYTHONUTF8='1'))
+        o = (r.stdout or b'').decode('utf-8', 'replace')
+        print('   ' + (o.strip().splitlines() or [''])[-1][:110])
+        if r.returncode: fails.append('수치 게이트 실패')
+    else:
+        fails.append(f'수치 게이트가 없습니다 — {gn}를 만들어 데이터와 본문 인용값을 묶으십시오')
 
     print('── 4~5. 사냥 패스 기록')
     hp = os.path.join(src, 'hunt.md')
