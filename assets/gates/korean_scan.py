@@ -182,7 +182,7 @@ def bias_table(sents, top=15):
     return chars, cnt.most_common(top)
 
 
-def run(fn):
+def run(fn, judged):
     blocks = blocks_of(io.open(fn, encoding='utf-8', errors='replace').read())
     sents = [x for _, t in blocks for x in split_sents(t)]
     print('==', os.path.basename(fn), f'· 블록 {len(blocks)} · 문장 {len(sents)}')
@@ -214,6 +214,7 @@ def run(fn):
         print(f'     ▸ {title}')
         for name, h in sub:
             nj += len(h)
+            judged.extend((title, name, s) for _, s in h)
             print(f'       [{name}] {len(h)}건')
             for g, s in h[:5]:
                 print(f'           «{g}»  {s[:88]}')
@@ -254,10 +255,60 @@ def run(fn):
     return nh
 
 
+TRIAGE_HEAD = """# 판정 기록 — 이 파일이 '판정 목록을 읽었다'는 증거다.
+#
+# 아래 각 줄의 [ ]에 판정을 적는다. 둘 중 하나다.
+#   [고침]  실제로 고쳤다. 다시 돌리면 그 줄은 목록에서 사라진다.
+#   [유지]  맥락상 정상이다. 왜 그런지 한마디를 뒤에 붙인다.
+#
+# [ ]로 남은 줄이 하나라도 있으면 검사는 실패한다. 요약만 보고 넘어가는 것을 막기 위해서다.
+# 본문을 고치면 그 줄은 자동으로 빠지고, 새로 생긴 것은 [ ]로 다시 붙는다.
+"""
+
+
+def triage(path, items):
+    """판정 항목마다 사람의 판단을 받아 적게 한다. 비어 있으면 통과시키지 않는다."""
+    old = {}
+    if os.path.exists(path):
+        for ln in io.open(path, encoding='utf-8'):
+            m = re.match(r'\[([^\]]*)\]\s*(.*?)\s*\|\|\s*(.*)$', ln.rstrip('\n'))
+            if m:
+                old[m.group(3)] = m.group(1).strip()
+
+    lines, blank = [], 0
+    for title, name, sent in items:
+        key = re.sub(r'\s+', ' ', sent)[:120]
+        verdict = old.get(key, '')
+        if not verdict:
+            blank += 1
+        lines.append(f'[{verdict or " "}] {title} · {name} || {key}')
+
+    io.open(path, 'w', encoding='utf-8').write(
+        TRIAGE_HEAD + '\n' + '\n'.join(lines) + '\n')
+    return blank, len(lines)
+
+
 if __name__ == '__main__':
-    bad = sum(run(f) for f in sys.argv[1:])
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    tpath = None
+    if '--triage' in sys.argv:
+        i = sys.argv.index('--triage')
+        tpath = sys.argv[i + 1] if len(sys.argv) > i + 1 else 'triage.txt'
+        args = [a for a in args if a != tpath]
+
+    judged = []
+    bad = sum(run(f, judged) for f in args)
+
+    if tpath:
+        blank, total = triage(tpath, judged)
+        print(f'\n판정 기록: {tpath} · 항목 {total}개 · 아직 판정하지 않은 것 {blank}개')
+        if blank:
+            print('  판정을 적지 않은 항목이 남아 있습니다. 각 줄의 [ ]에 [고침] 또는'
+                  ' [유지 · 이유]를 적으십시오.')
+            bad += blank
+
     if bad:
-        print('\nHARD 위반이 남아 있습니다. 고친 뒤 다시 돌리십시오.')
+        print('\n통과하지 못했습니다. 고친 뒤 다시 돌리십시오.')
     else:
-        print('\nHARD 0. 판정 목록을 끝까지 보지 않았다면 아직 납품하지 않습니다.')
+        print('\nHARD 0 · 판정 완료.')
     sys.exit(1 if bad else 0)

@@ -73,11 +73,15 @@ PyMuPDF로 렌더해 이미지로 읽는다. 해설지만 있고 문제 원문�
 임무를 "어색한 한국어 고치기" 하나로 좁힌 별도 패스가 필요하다. 이 단계를 건너뛰면 노트는
 게이트를 전부 통과하면서도 한국어가 엉망인 채로 납품된다.
 
-린터(`korean_scan.py`, `check_content_style.py`)로 후보를 뽑고, **그다음 본문을 처음부터 끝까지
-읽는다.** 린터는 알려진 패턴만 잡는다 — 지워도 되는 문장, 글쓴이만 아는 은어, 쓸데없이 쪼갠
+`korean_scan.py out.html --triage triage.txt`로 후보를 뽑고 **판정 항목 전량에 판정을 적은 뒤**,
+**본문을 처음부터 끝까지 읽는다.** 판정 기록을 채우지 않으면 검사가 통과하지 않는다 —
+요약줄의 "HARD 0건"만 보고 넘기는 일이 실제로 있었기 때문이다. 린터는 알려진 패턴만 잡는다 — 지워도 되는 문장, 글쓴이만 아는 은어, 쓸데없이 쪼갠
 문장은 읽어야만 드러난다. 기준과 절차는 `references/hunt-pass.md`.
 
 ### 7. 납품하고 재현 가능하게 남긴다
+**`gate_deliver.py`가 통과해야 납품한다.** 구조·문체·사냥 패스 기록을 한 번에 보고, 사냥 패스
+기록이 지금 빌드와 짝이 맞는지까지 확인한다. 본문을 고치면 기록이 낡아 다시 통독하게 된다.
+
 완성 HTML과 **소스 조각·게이트·매니페스트를 함께** 저장하고, 저장한 소스로 다시 조립한 파일이
 납품본과 같은지 확인한다(`cmp`). 다음 강의를 이어 만들 때 이것이 있으면 데이터와 그림을 그대로
 확장할 수 있다.
@@ -104,7 +108,7 @@ PyMuPDF로 렌더해 이미지로 읽는다. 해설지만 있고 문제 원문�
 - `assets/gates/` — `gate_struct.py`, `gate_numbers_template.py`, `render_check.py`,
   `audit_prep.py`, `texscan.py`, `korean_scan.py`(문체 검사 — HARD·판정·통계 세 층,
   제목·표 칸까지 본다), `check_content_style.py`(번역체·AI 결함을 하드/소프트로 구분),
-  `itest-template.js`.
+  `gate_deliver.py`(납품 게이트 — 위 셋과 사냥 패스 기록을 묶어서 본다), `itest-template.js`.
 - `assets/assemble.py`, `assets/note.example.json` — 조립기와 매니페스트 예시.
 - `assets/example/` — 위 자산만으로 조립되는 최소 노트 한 벌(조각·패널·spy·그림·데이터·수치
   게이트·용어 파일). `python ../assemble.py note.json`으로 그 자리에서 다시 조립된다.
