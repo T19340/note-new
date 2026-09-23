@@ -141,8 +141,10 @@ JUDGE = [
         ('번역투 have / provide', r'(을|를) 가집니다|(을|를) 가지고 있|(을|를) 제공합니다'),
         ('번역투 by / make', r'에 의해|에 불과합니다|하게 만듭니다|하도록 만듭니다'),
         ('번역투 from', r'(으로|로)부터'),
+        # 셸이 쓰는 패널 라벨(— 목차 —, — §1.1 —)은 문장을 잇는 줄표가 아니라 구분 기호다.
+        # 모든 노트에 똑같이 들어 있어, 잡으면 판정 목록만 매번 불린다.
         ('줄표로 문장 잇기 — 접속어로 끊어 쓸 자리인지 본다', r'[—–]'),
-    ], None),
+    ], r'—\s*(목차|§|참고)|(목차|§[\d.]*|자료)\s*—'),
 ]
 
 # 낱말 편중표에서 뺄 말 — 조사·의존명사·흔한 기능어
@@ -154,33 +156,128 @@ STOP = set('''그리고 그러나 그래서 그런데 하지만 다만 또는 �
 PROSE_KINDS = ('p', 'li')          # 문장 연타는 산문 블록에서만 센다
 
 
-def blocks_of(src):
-    """본문 블록을 (종류, 글) 목록으로 뽑는다. 제목·표 칸까지 본다 — 결함은 거기에도 앉는다."""
-    s = re.sub(r'(?is)<(script|style)\b.*?</\1>', ' ', src)
-    s = re.sub(r'(?s)<!--.*?-->', ' ', s)
-    # 패널의 참조 카드도 학생이 읽는 글이므로 검사에 넣는다. 목차 링크만 뺀다.
-    s = re.sub(r'(?is)<nav class="toc".*?</nav>', ' ', s)        # 상단 목차
-    s = re.sub(r'(?is)<div class="(orig|enans)".*?</div>', ' ', s)
-    s = re.sub(r'(?is)<span class="en".*?</span>', ' ', s)
+# 글을 나르지 않는 껍데기. 텍스트는 이 바깥의 가장 가까운 조상에 붙인다.
+INLINE = {'b', 'i', 'em', 'strong', 'span', 'a', 'sup', 'sub', 'code', 'u', 'small',
+          'mark', 'abbr', 'kbd', 'var', 'del', 'ins', 'q', 'cite', 'time', 'label'}
+VOID = {'br', 'img', 'input', 'hr', 'meta', 'link', 'source', 'col', 'area', 'wbr'}
 
-    if '<' in s and '>' in s:
-        raw = re.findall(r'(?is)<(p|li|figcaption|h[1-4]|td|th)\b[^>]*>(.*?)</\1>', s)
-    else:
+
+def strip_excluded(src):
+    """검사에서 빼는 것은 여기 한 곳에만 적는다. 무엇을 왜 뺐는지 셀 수 있어야 한다."""
+    cuts = []
+    def cut(pat, why, s):
+        n = [0]
+        def f(m):
+            n[0] += len(re.findall(r'[가-힣]', re.sub(r'<[^>]+>', ' ', m.group(0))))
+            return ' '
+        s = re.sub(pat, f, s)
+        if n[0]:
+            cuts.append((why, n[0]))
+        return s
+    s = cut(r'(?is)<(script|style)\b.*?</\1>', '스타일시트·코드(한국어 문자열은 따로 검사)', src)
+    s = cut(r'(?s)<!--.*?-->', '주석', s)
+    s = cut(r'(?is)<(p|div|span)[^>]*class="[^"]*\b(pen|orig|enans|en)\b[^"]*"[^>]*>.*?</\1>',
+            '영어 원문(고쳐 쓰면 인용이 깨진다)', s)
+    s = re.sub(r'data-tex="[^"]*"', ' ', s)       # 수식은 texscan이 본다
+    return s, cuts
+
+
+def text_nodes(s):
+    """모든 텍스트 노드를 가장 가까운 블록 조상에 묶어 (태그, 글)로 돌려준다.
+
+    예전에는 `p·li·h·td·th·figcaption`만 뽑았다. 그 바깥의 글 — 문제 머리표(.ph/.tg),
+    그림 태그(.figtag), 캔버스 설명(.sub), 버튼 라벨, 접기 요약(summary), 패널 카드의 값 —
+    은 **한 번도 검사된 적이 없었다.** 실측으로 노트의 한글 16%가 검사 밖이었다.
+    학생이 읽는 글이면 검사한다. 화이트리스트는 빠뜨린 것을 조용히 만든다."""
+    blocks, order, stack, pos, uid = {}, [], [('body', 0)], 0, 0
+    def put(txt):
+        key = next((u for n, u in reversed(stack) if n not in INLINE), 0)
+        name = next((n for n, _ in reversed(stack) if n not in INLINE), 'body')
+        if key not in blocks:
+            blocks[key] = [name, []]
+            order.append(key)
+        blocks[key][1].append(txt)
+
+    for m in re.finditer(r'(?s)<(/?)([a-zA-Z][\w-]*)[^>]*?(/?)>', s):
+        if s[pos:m.start()].strip():
+            put(s[pos:m.start()])
+        pos = m.end()
+        closing, name = m.group(1), m.group(2).lower()
+        if closing:
+            if any(n == name for n, _ in stack):
+                while stack and stack.pop()[0] != name:
+                    pass
+        elif not m.group(3) and name not in VOID:
+            uid += 1
+            stack.append((name, uid))
+    if s[pos:].strip():
+        put(s[pos:])
+    return [(blocks[k][0], ' '.join(blocks[k][1])) for k in order]
+
+
+def js_strings(src):
+    """그림 코드 안의 한국어 문자열. readout·퀴즈 피드백·버튼 라벨은 화면에 그대로 뜬다.
+
+    스크립트를 통째로 빼 두었더니 이 글이 검사 밖이었다. 그렇다고 코드 전체를 훑으면
+    예전처럼 오탐만 쏟아지므로(CSS 주석의 줄표 8건), **한글이 든 문자열 리터럴만** 본다."""
+    out = []
+    for m in re.finditer(r'(?is)<script\b([^>]*)>(.*?)</script>', src):
+        if 'application/json' in m.group(1):
+            continue                     # 데이터는 수치 게이트가 본다
+        for lm in re.finditer(r'"([^"\\\n]{0,400})"|\'([^\'\\\n]{0,400})\'|`([^`\\]{0,400})`',
+                              m.group(2)):
+            t = (lm.group(1) or lm.group(2) or lm.group(3) or '').strip()
+            if re.search(r'[가-힣]', t):
+                out.append(re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', t)).strip())
+    return out
+
+
+def blocks_of(src):
+    """노트에 실리는 글 전부를 (종류, 글) 목록으로 뽑는다."""
+    s, _cuts = strip_excluded(src)
+    if '<' not in s or '>' not in s:
         raw = [('p', x) for x in s.split('\n')]
+    else:
+        raw = text_nodes(s)
 
     out, seen = [], set()
     for kind, b in raw:
         t = re.sub(r'(?s)\\\[.*?\\\]|\\\(.*?\\\)', ' [식] ', b)
         t = re.sub(r'(?s)\$\$.*?\$\$', ' [식] ', t)
         t = re.sub(r'\$[^$\n]{0,200}?\$', ' [식] ', t)
-        t = re.sub(r'data-tex="[^"]*"', ' ', t)
         t = re.sub(r'<[^>]+>', ' ', t)
         t = re.sub(r'&[a-z]+;|&#\d+;', ' ', t)
         t = re.sub(r'(\s*\[식\]\s*)+', ' [식] ', t)
         t = re.sub(r'\s+', ' ', t).strip()
         if t and t not in seen:
             seen.add(t); out.append((kind.lower(), t))
+    for t in js_strings(src):
+        if t and t not in seen:
+            seen.add(t); out.append(('js', t))
     return out
+
+
+def coverage(src):
+    """검사한 글자 수와 뺀 글자 수를 센다. 빠짐없이 보았는지는 세어 봐야 안다.
+
+    블록 목록은 같은 글을 한 번만 보므로(목차가 절 제목을 되풀이하는 식), 검사한 쪽도
+    중복을 없앤 뒤에 견준다. 그러지 않으면 중복이 '누락'으로 보여 진짜 구멍을 덮는다."""
+    s, cuts = strip_excluded(src)
+    if '<' in s and '>' in s:
+        nodes = text_nodes(s)
+    else:
+        nodes = [('p', x) for x in s.split('\n')]
+    uniq, total = set(), 0
+    for b in js_strings(src):
+        if b and b not in uniq:
+            uniq.add(b); total += len(re.findall(r'[가-힣]', b))
+    for _, b in nodes:
+        t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', b)).strip()
+        if t and t not in uniq:
+            uniq.add(t)
+            total += len(re.findall(r'[가-힣]', t))
+    seen = sum(len(re.findall(r'[가-힣]', t)) for _, t in blocks_of(src))
+    return total, seen, cuts
 
 
 def split_sents(t):
@@ -345,7 +442,12 @@ def run(fn, judged, terms=()):
     raw = io.open(fn, encoding='utf-8', errors='replace').read()
     blocks = blocks_of(raw)
     sents = [x for _, t in blocks for x in split_sents(t)]
+    total, seen, cuts = coverage(raw)
+    cut_txt = ' · '.join(f'{w} {n}자' for w, n in cuts) or '없음'
     print('==', os.path.basename(fn), f'· 블록 {len(blocks)} · 문장 {len(sents)}')
+    print(f'  검사 범위: 한글 {seen:,}자 / {total:,}자'
+          + (f' — 못 본 {total - seen:,}자' if total > seen else ' (빠짐없음)'))
+    print(f'  검사에서 뺀 것: {cut_txt}')
 
     print('  ── 1. HARD — 고쳐야 합니다')
     nh = 0
@@ -442,7 +544,10 @@ def run(fn, judged, terms=()):
         print(f'         {w:<10} {c:>4}  ' + '█' * min(28, c * 28 // max(top[0][1], 1)))
 
     print(f'  요약: HARD {nh}건 · 판정 {nj}건 · 연타 {len(runs)}구간')
-    return nh
+    # 검사 범위가 100%가 아니면 그 노트는 검사된 적이 없는 글을 품고 있다. 실측: 추출기가
+    # 태그 화이트리스트였을 때 노트 한글의 16%(682자)가 한 번도 검사되지 않았고, 거기에
+    # 다른 노트에서 따라온 <title>이 들어 있었다.
+    return nh + (1 if total > seen else 0)
 
 
 SELFTEST = [

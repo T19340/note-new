@@ -37,7 +37,7 @@ function Quiz(o){
       d.innerHTML = '<b>' + it.t + '</b>' + (it.k ? '<span class="qk">' + it.k + '</span>' : '');
       d.addEventListener('click', () => {
         sel = i; draw();
-        fb.innerHTML = res[i] === null ? '고른 카드: <b>' + it.t + '</b>. 아래에서 답을 누르세요.' : feedback(i);
+        fb.innerHTML = res[i] === null ? '고른 카드: <b>' + it.t + '</b>. 아래에서 답을 누르십시오.' : feedback(i);
       });
       grid.appendChild(d);
     });
@@ -45,11 +45,11 @@ function Quiz(o){
     ro.innerHTML = '<span class="k">맞힌 수</span> ' + r + ' · <span class="k">풀어 본 수</span> ' + n + ' · <span class="k">전체</span> ' + o.items.length;
   }
   document.querySelectorAll(o.btnSel).forEach(b => b.addEventListener('click', () => {
-    if (sel < 0) { fb.innerHTML = '먼저 카드를 하나 고르세요.'; return; }
+    if (sel < 0) { fb.innerHTML = '먼저 카드를 고르십시오.'; return; }
     const pk = b.getAttribute('data-a'); picks[sel] = pk; res[sel] = (pk === o.items[sel].a);
     draw(); fb.innerHTML = feedback(sel);
   }));
-  el(o.reset).addEventListener('click', () => { sel = -1; res.fill(null); picks.fill(null); fb.innerHTML = '카드를 하나 고르세요.'; draw(); });
+  el(o.reset).addEventListener('click', () => { sel = -1; res.fill(null); picks.fill(null); fb.innerHTML = '카드를 고르십시오.'; draw(); });
   draw();
 }
 window.RSM.Quiz = Quiz;

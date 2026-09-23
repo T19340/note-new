@@ -29,6 +29,20 @@ ids = re.findall(r'\sid="([^"]+)"', body)
 dup = sorted({x for x in ids if ids.count(x) > 1})
 ok(not dup, f'id 중복: {dup}')
 
+# <title>은 탭·북마크·검색결과에 뜨는 이름인데 본문 어디에도 보이지 않아 눈으로는 못 잡는다.
+# 셸을 복사해 쓰는 방식이라 앞 노트의 제목이 그대로 따라오고, 실제로 확률론 노트가 회계
+# 노트의 제목을 달고 납품됐다. 제목이 h1과 한 낱말도 겹치지 않으면 남의 제목일 가능성이 높다.
+_t = re.search(r'(?is)<title>(.*?)</title>', src)
+_h = re.search(r'(?is)<h1[^>]*>(.*?)</h1>', src)
+_tt = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', _t.group(1))).strip() if _t else ''
+ok(bool(_tt), '<title>이 비어 있습니다')
+ok('제목을 정하십시오' not in _tt, f'<title>이 자리표시자 그대로입니다: 「{_tt}」')
+if _tt and _h:
+    _hw = set(re.findall(r'[가-힣]{2,}', re.sub(r'<[^>]+>', '', _h.group(1))))
+    _tw = set(re.findall(r'[가-힣]{2,}', _tt))
+    ok(not _hw or bool(_hw & _tw),
+       f'<title>「{_tt}」이 h1과 한 낱말도 겹치지 않습니다 — 다른 노트의 제목이 남아 있는지 보십시오')
+
 secs = re.findall(r'<h3 class="sec" id="([^"]+)"', body)
 nav = re.findall(r'href="#([^"]+)"', re.search(r'<aside class="tool-panel nav-panel">([\s\S]*?)</aside>', body).group(1))
 fcards = re.findall(r'<div class="fcard" data-sec="([^"]+)"', body)

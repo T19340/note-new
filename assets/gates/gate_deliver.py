@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 """납품 게이트 — 이것을 통과하지 못하면 노트를 넘기지 않는다.
 
-usage: python gate_deliver.py <조립된.html> [--src <소스폴더>]
+usage: python gate_deliver.py <조립된.html> [--src <소스폴더>]   납품 전 전수 검사
+       python gate_deliver.py --draft p1.html …                조각을 쓰자마자 그 자리에서
+
+검사는 두 번 돈다. **쓰는 동안 조각마다 한 번**(--draft), **다 쓴 뒤 조립본으로 한 번**.
+마지막에 몰아서 하면 그때는 이미 그 문장을 전제로 뒷글을 써 놓은 뒤라, 고치면 뒷글까지
+흔들리고 결국 그냥 두게 된다.
 
 왜 이 파일이 있나. 게이트들이 저마다 종료코드를 내는 동안 **사냥 패스만 산출물이 없어서**
 납품 판단에서 빠졌다. 돌려도 파일이 안 생기고 안 돌려도 아무것도 실패하지 않으니, 체크리스트
@@ -135,9 +140,60 @@ def run(script, args):
     return r.returncode, out
 
 
+def draft(files):
+    """조각을 쓰자마자 돌리는 검사. 조립 전이라 구조·수치·렌더는 볼 수 없지만, **글은 전부
+    볼 수 있다.**
+
+    왜 따로 있나. 검사를 마지막에 몰아서 하면, 그때는 이미 그 문장을 전제로 뒷글을 써 놓은
+    뒤다. 고치면 뒷글까지 흔들리고, 흔들리는 게 싫어 그냥 두게 된다. 그래서 **쓴 자리에서
+    바로** 읽고 고친다. 여기서 읽어 표시한 문장은 납품 게이트의 장부에 그대로 남으므로,
+    마지막 통독은 그 뒤에 바뀐 것만 보면 된다."""
+    src = os.path.dirname(os.path.abspath(files[0]))
+    fails = []
+    print('── 문체 (HARD 0 + 판정 전량 기록)')
+    # 조각 검사는 제 판정 파일을 따로 쓴다. 같은 파일에 쓰면 조각에 없는 항목의 판정이
+    # 지워진다 — 실제로 조각 넷에 돌렸다가 조립본에서 적어 둔 판정 7건이 날아갔다.
+    rc, out = run('korean_scan.py',
+                  list(files) + ['--triage', os.path.join(src, 'triage.draft.txt')])
+    for l in out.strip().splitlines():
+        if '검사 범위' in l or '요약' in l or '판정 기록' in l:
+            print('   ' + l.strip()[:110])
+    if rc: fails.append('문체 게이트 실패')
+
+    print('── 번역투·AI 말투')
+    rc, out = run('check_content_style.py', list(files))
+    print('   ' + (out.strip().splitlines() or [''])[-1][:110])
+    if rc: fails.append('번역체·AI 어투 하드 위반')
+
+    print('── 통독 장부')
+    snap = os.path.join(src, '.hunt_sentences.txt')
+    added = []
+    for f in files:
+        a, _ = new_sentences(os.path.abspath(f), snap)
+        added += a
+    ledger = os.path.join(src, 'hunt_read.txt')
+    seen = set()
+    added = [s for s in added if not (s in seen or seen.add(s))]
+    blank = read_ledger(ledger, added)
+    print(f'   새로 쓴 문장 {len(added)}개 · 아직 읽지 않은 것 {blank}개')
+    if blank:
+        for s in added[:10]:
+            print(f'     · {s[:100]}')
+        fails.append(f'방금 쓴 문장을 읽지 않았습니다 — {ledger}의 [ ]를 채우십시오')
+
+    print('\nFAILS:', len(fails))
+    for f in fails: print('  ✗', f)
+    if not fails:
+        print('\n이 조각은 통과했습니다. 다음 조각으로 가도 됩니다 '
+              '(납품 전에는 조립본으로 gate_deliver를 한 번 더 돌립니다).')
+    return 1 if fails else 0
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__); return 2
+    if sys.argv[1] == '--draft':
+        return draft(sys.argv[2:])
     note = os.path.abspath(sys.argv[1])
     src = os.path.dirname(note)
     if '--src' in sys.argv:

@@ -7,6 +7,7 @@
 사용:  python assemble.py [note.json]        # 기본값: 같은 폴더의 note.json
 note.json 예시는 note.example.json 참고.
 """
+import re
 import io, json, os, sys
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -42,6 +43,18 @@ for f in [os.path.join(SKILL, 'js', 'common.js')] + [os.path.join(ROOT, f) for f
     out.append('<script>\n' + io.open(f, encoding='utf-8').read() + '\n</script>\n')
 out.append(rd(ROOT, CFG['spy']))                            # scroll-spy + </body></html>
 
+html = ''.join(out)
+
+# 브라우저 탭·북마크에 뜨는 이름. 셸에 박힌 채로 두면 다른 노트의 제목을 그대로 물려받는다.
+# 실제로 확률론 노트가 회계 노트의 제목을 달고 납품됐고, 검사기가 <title>을 보지 않아
+# 아무도 몰랐다. note.json의 title, 없으면 마스트헤드의 <h1>에서 가져온다.
+title = CFG.get('title')
+if not title:
+    m = re.search(r'(?is)<h1[^>]*>(.*?)</h1>', html)
+    title = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', m.group(1))).strip() if m else ''
+if title:
+    html = re.sub(r'(?is)<title>.*?</title>', '<title>' + title + '</title>', html, count=1)
+
 dst = os.path.join(ROOT, CFG.get('out', 'out.html'))
-io.open(dst, 'w', encoding='utf-8').write(''.join(out))
-print('written', dst, sum(len(x) for x in out), 'chars')
+io.open(dst, 'w', encoding='utf-8').write(html)
+print('written', dst, len(html), 'chars ·', title or '(제목 없음)')
