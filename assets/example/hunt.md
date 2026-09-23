@@ -1,6 +1,6 @@
 # 사냥 패스 기록
 
-build: f0d3ada54e30c33c
+build: 03b20fdd0ad71fe9
 file: out.html
 
 예제 노트도 납품물과 같은 패스를 거친다. 짧다고 건너뛰면 "짧으면 안 해도 된다"가 규칙이 된다.
