@@ -15,6 +15,17 @@ for fn in sys.argv[1:]:
     for kind, pos, t in sorted(segs, key=lambda x: x[1]):
         issues = []
         if '\t' in t: issues.append('TAB')
+        # 인라인 MathJax(tex-svg)에는 한글 글리프가 없어 \text{월} 같은 수식이 통째로
+        # "Math input error"가 된다. 렌더 게이트가 mjx 오류 수로 잡아 주지만 어느 수식인지는
+        # 말해 주지 않으므로 여기서 이름으로 잡는다. 한글은 수식 밖 본문에 쓴다.
+        if re.search(r'[가-힣]', t):
+            issues.append('수식 안의 한글 — 인라인 MathJax가 렌더하지 못한다')
+        # 셸 헤어독으로 조각을 쓰면 \frac \b \v 의 백슬래시가 먹히면서 제어문자만 남는다.
+        # 실측: "EX=12\cdot\frac{5}{20}=3"이 \x0crac{5}{20}이 되어 수식 하나가 통째로
+        # "Math input error"가 됐다. 눈으로는 보이지 않고 렌더해야 드러난다.
+        for ch, name in ((chr(7), 'a'), (chr(8), 'b'), (chr(11), 'v'), (chr(12), 'f')):
+            if ch in t:
+                issues.append(f'제어문자 — 백슬래시가 먹혀 \\{name} 가 뭉개졌다')
         if kind == '$' and '\n' in t: issues.append('인라인 수식 내 줄바꿈')
         if re.search(r'(?<!' + re.escape(BS) + r')' + re.escape(BS) + r' [0-9\-]', t): issues.append('역슬래시+공백+숫자(행구분 파손 의심)')
         if re.search(re.escape(BS) + r'[bcfv](?![a-zA-Z])', t): issues.append('수상한 제어열 \\b\\c\\f\\v')
