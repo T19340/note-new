@@ -223,11 +223,11 @@ def main():
     ledger = os.path.join(src, 'hunt_read.txt')
     blank = read_ledger(ledger, added)
     print(f'   새로 쓰거나 고친 문장 {len(added)}개 · 아직 읽지 않은 것 {blank}개')
-    for s in added[:8]:
-        print(f'     · {s[:100]}')
-    if len(added) > 8:
-        print(f'     … 외 {len(added) - 8}개 — {ledger}')
     if blank:
+        for s in added[:8]:
+            print(f'     · {s[:100]}')
+        if len(added) > 8:
+            print(f'     … 외 {len(added) - 8}개 — {ledger}')
         fails.append(f'통독하지 않은 문장이 {blank}개 남았습니다. {ledger}의 [ ]를 하나씩 '
                      f'채우십시오 — 읽고 [읽음], 고쳤으면 [고침]')
     elif fresh:
