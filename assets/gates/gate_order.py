@@ -67,11 +67,16 @@ def stem(w):
     return w
 
 
+# 서술어는 그 문제의 '내용'이 아니다. 실측: "…와 다릅니다"가 소득 문제에만 있다는 이유로
+# 앞에서 쓴 "값은 …와 다릅니다"가 앞선 언급으로 잡혔다. 잡아야 할 것은 미리 풀어 쓴 **대상**이다.
+PRED = re.compile(r'(니다|세요|십시오|는다|ㄴ다|었다|았다|이다|해요|네요)$')
+
+
 def words(t):
     out = set()
     for w in re.findall(r'[가-힣]{2,}', t):
         w = stem(w)
-        if len(w) >= 3 and w not in STOP:
+        if len(w) >= 3 and w not in STOP and not PRED.search(w):
             out.add(w)
     return out
 

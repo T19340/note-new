@@ -76,6 +76,28 @@ def sha(path):
     return hashlib.sha256(io.open(path, 'rb').read()).hexdigest()[:16]
 
 
+def sentences(note):
+    """노트에 실린 문장 전부. 문체 검사와 같은 추출기를 쓴다 — 두 벌이면 갈라진다."""
+    sys.path.insert(0, HERE)
+    import korean_scan as K
+    src = io.open(note, encoding='utf-8', errors='replace').read()
+    return [s for _, t in K.blocks_of(src) for s in K.split_sents(t)]
+
+
+def new_sentences(note, snap):
+    """지난 기록 이후 새로 쓴 문장. 해시는 '무엇이 바뀌었는지'를 말해 주지 않는다.
+
+    실측: 본문에 네 문장을 새로 넣고 해시만 고쳐 기록을 갱신했더니, 그 네 문장은 사냥 패스를
+    한 번도 거치지 않고 납품됐다. 그중 하나가 아무것도 말하지 않는 빈 문장이었고 다른 하나에는
+    관사 자국('식 하나로')이 있었다. **기록을 요구하는 것과 읽기를 요구하는 것은 다르다.**
+    그래서 새로 생긴 문장을 짚어 준다. 읽을 대상이 눈앞에 있으면 건너뛸 구실이 없다."""
+    cur = sentences(note)
+    if not os.path.exists(snap):
+        return cur, cur
+    old = set(io.open(snap, encoding='utf-8').read().split('\n'))
+    return [s for s in cur if s not in old], cur
+
+
 def run(script, args):
     r = subprocess.run([sys.executable, os.path.join(HERE, script)] + args,
                        capture_output=True, env=dict(os.environ, PYTHONUTF8='1'))
@@ -137,7 +159,9 @@ def main():
 
     print('── 4~5. 사냥 패스 기록')
     hp = os.path.join(src, 'hunt.md')
+    snap = os.path.join(src, '.hunt_sentences.txt')
     cur = sha(note)
+    fresh = False
     if not os.path.exists(hp):
         io.open(hp, 'w', encoding='utf-8').write(TEMPLATE.format(h=cur, f=os.path.basename(note)))
         fails.append(f'사냥 패스를 돌리지 않았습니다. {hp}를 만들어 두었으니 본문을 통독하고 채우십시오')
@@ -147,14 +171,33 @@ def main():
         if not m or m.group(1) != cur:
             fails.append(f'사냥 패스 기록이 낡았습니다. 본문이 바뀌었으니 다시 통독하고 build를 {cur}로 고치십시오')
         else:
+            fresh = True
             print(f'   build {cur} 일치')
+
+        checked = 0
         for mark, name in HUNT_TYPES:
             sec = re.search(r'##\s*' + mark + r'[^\n]*\n(.*?)(?=\n##|\Z)', t, re.S)
             body = (sec.group(1).strip() if sec else '')
+            checked += 1
             if len(body) < 15:
                 fails.append(f'사냥 패스 유형 {mark} {name}: 적힌 내용이 없습니다')
             else:
                 print(f'   {mark} {name} — {len(body)}자')
+        # 검사를 몇 개 돌았는지 세어 둔다. 이 루프가 조건절 안으로 빨려 들어가 통째로
+        # 건너뛰어진 적이 있고, 그때도 출력은 "FAILS: 0"이었다.
+        if checked != len(HUNT_TYPES):
+            fails.append(f'사냥 패스 유형 검사가 {checked}/{len(HUNT_TYPES)}개만 돌았습니다')
+
+    added, allsents = new_sentences(note, snap)
+    if fresh:
+        # 이 빌드를 읽었다고 기록했으니 기준점을 옮긴다. 다음 수정부터 다시 센다.
+        io.open(snap, 'w', encoding='utf-8').write('\n'.join(allsents))
+    elif added:
+        print(f'\n   지난 기록 이후 새로 쓴 문장 {len(added)}개 — 이것부터 읽으십시오')
+        for s in added[:12]:
+            print(f'     · {s[:104]}')
+        if len(added) > 12:
+            print(f'     … 외 {len(added) - 12}개')
 
     print('\nFAILS:', len(fails))
     for f in fails: print('  ✗', f)
