@@ -104,6 +104,14 @@ JUDGE = [
         ('문장 전체가 이유절 — 앞 문장에 접어 넣는다', r'^[^.!?]{0,70}기?\s때문입니다\.?$'),
     ], r'사실상'),
 
+    ('빈 서술 — 존재만 알리는 문장', [
+        # "…를 다룹니다 / …문제가 있습니다"는 무엇이 어떻다는 내용이 없다. 그 내용을 바로 쓴다.
+        ('"…를 다룹니다 / 알아봅니다" — 내용을 바로 쓴다',
+         r'[을를]\s*(다룹니다|알아봅니다|살펴봅니다|짚어 봅니다|소개합니다)'),
+        ('"…문제가 있습니다" 류 — 무엇이 어떤지를 쓴다',
+         r'(문제|경우|상황|방법)[가이]\s*있습니다'),
+    ], None),
+
     ('번역투·분열문·비유', [
         ('"…것뿐입니다 / …이 전부입니다"', r'(것|일)뿐입니다|(의|이|가) 전부입니다'),
         ('분열문 "바로 …" / "다름 아닌"', r'바로 (그|이|여기|그것|이것)|다름 아닌'),
@@ -182,8 +190,52 @@ def bias_table(sents, top=15):
     return chars, cnt.most_common(top)
 
 
+
+def title_echo(html):
+    """부제·요지의 첫 문장이 제목을 바꿔 말한 것인지 본다.
+    제목을 읽은 독자에게 아무것도 주지 않는 첫 문장은 노트에서 가장 흔한 빈 서술이다."""
+    t = re.search(r'(?is)<h1[^>]*>(.*?)</h1>', html)
+    if not t:
+        return []
+    title = {w for w in re.findall(r'[가-힣]{2,}', re.sub(r'<[^>]+>', ' ', t.group(1)))}
+    if not title:
+        return []
+    out = []
+    for cls in ('subtitle', 'summary'):
+        m = re.search(r'(?is)class="[^"]*' + cls + r'[^"]*"[^>]*>(.*?)</(?:p|div)>', html)
+        if not m:
+            continue
+        txt = re.sub(r'<[^>]+>', ' ', m.group(1))
+        first = re.split(r'(?<=[.!?])\s', re.sub(r'\s+', ' ', txt).strip())[0]
+        fw = {w for w in re.findall(r'[가-힣]{2,}', first)}
+        if not fw:
+            continue
+        share = len(fw & title) / len(title)
+        if share >= 0.6:
+            out.append((cls, first[:70], share))
+    return out
+
+
+def word_churn(blocks, times=3):
+    """한 문단 안에서 같은 실질 낱말이 세 번 이상 나오면 문장이 제자리를 도는 신호다."""
+    out = []
+    for kind, t in blocks:
+        if kind not in PROSE_KINDS:
+            continue
+        c = collections.Counter()
+        for w in re.findall(r'[가-힣]{3,}', t):
+            w = re.sub(r'(으로|에서|입니다|합니다|이고|은|는|이|가|을|를|의|에|도|만|과|와|로)$', '', w)
+            if len(w) >= 2 and w not in STOP:
+                c[w] += 1
+        for w, n in c.items():
+            if n >= times:
+                out.append((w, n, t[:70]))
+    return out
+
+
 def run(fn, judged):
-    blocks = blocks_of(io.open(fn, encoding='utf-8', errors='replace').read())
+    raw = io.open(fn, encoding='utf-8', errors='replace').read()
+    blocks = blocks_of(raw)
     sents = [x for _, t in blocks for x in split_sents(t)]
     print('==', os.path.basename(fn), f'· 블록 {len(blocks)} · 문장 {len(sents)}')
 
@@ -245,6 +297,17 @@ def run(fn, judged):
     print(f'     짧은 문장 3연속 — {len(runs)}구간 (합칠 자리인지 읽어 본다)')
     for r in runs[:3]:
         print('         · ' + ' / '.join(x[:34] for x in r[:3]))
+
+    for cls, first, share in title_echo(raw):
+        judged.append(('빈 서술 — 존재만 알리는 문장', '첫 문장이 제목의 바꿔 말하기', first))
+        print(f'     ▸ {cls}의 첫 문장이 제목과 낱말이 {share:.0%} 겹칩니다 — 제목이 이미 말한 것을 빼십시오')
+        print(f'         «{first}»')
+    churn = word_churn(blocks)
+    if churn:
+        print(f'     ▸ 한 문단에 같은 낱말 3회 이상 — {len(churn)}건 (문장이 제자리를 도는 신호)')
+        for w, n, t in churn[:3]:
+            judged.append(('빈 서술 — 존재만 알리는 문장', f"'{w}' {n}회 반복", t))
+            print(f'         «{w}» {n}회  {t}')
 
     chars, top = bias_table(sents)
     print(f'     낱말 편중표 (본문 한글 {chars:,}자) — 주제어가 아닌데 상위면 다의어 고정을 의심')
