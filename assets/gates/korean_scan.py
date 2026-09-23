@@ -131,7 +131,7 @@ def blocks_of(src):
     """본문 블록을 (종류, 글) 목록으로 뽑는다. 제목·표 칸까지 본다 — 결함은 거기에도 앉는다."""
     s = re.sub(r'(?is)<(script|style)\b.*?</\1>', ' ', src)
     s = re.sub(r'(?s)<!--.*?-->', ' ', s)
-    s = re.sub(r'(?is)<div class="panel-rail".*?$', ' ', s)     # 우측 패널 라벨
+    # 패널의 참조 카드도 학생이 읽는 글이므로 검사에 넣는다. 목차 링크만 뺀다.
     s = re.sub(r'(?is)<nav class="toc".*?</nav>', ' ', s)        # 상단 목차
     s = re.sub(r'(?is)<div class="(orig|enans)".*?</div>', ' ', s)
     s = re.sub(r'(?is)<span class="en".*?</span>', ' ', s)
