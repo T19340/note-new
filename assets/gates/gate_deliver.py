@@ -85,17 +85,47 @@ def sentences(note):
 
 
 def new_sentences(note, snap):
-    """지난 기록 이후 새로 쓴 문장. 해시는 '무엇이 바뀌었는지'를 말해 주지 않는다.
-
-    실측: 본문에 네 문장을 새로 넣고 해시만 고쳐 기록을 갱신했더니, 그 네 문장은 사냥 패스를
-    한 번도 거치지 않고 납품됐다. 그중 하나가 아무것도 말하지 않는 빈 문장이었고 다른 하나에는
-    관사 자국('식 하나로')이 있었다. **기록을 요구하는 것과 읽기를 요구하는 것은 다르다.**
-    그래서 새로 생긴 문장을 짚어 준다. 읽을 대상이 눈앞에 있으면 건너뛸 구실이 없다."""
+    """지난 기록 이후 새로 쓰거나 고친 문장."""
     cur = sentences(note)
     if not os.path.exists(snap):
         return cur, cur
     old = set(io.open(snap, encoding='utf-8').read().split('\n'))
     return [s for s in cur if s not in old], cur
+
+
+READ_HEAD = """# 통독 장부 — 새로 쓰거나 고친 문장을 한 줄씩 읽었다는 증거다.
+#
+# 각 줄의 [ ]를 채운다.
+#   [읽음]          읽었고 고칠 것이 없다.
+#   [고침]          고쳤다. 다시 돌리면 그 줄은 사라지고 새 문장이 붙는다.
+#
+# [ ]가 하나라도 남으면 납품 게이트는 통과하지 않는다.
+#
+# 왜 이 파일이 있나. 사냥 패스에 흔적을 요구하고(hunt.md), 본문이 바뀌면 그 흔적이 낡게
+# 만들고, 새로 생긴 문장을 짚어 주기까지 했는데도 **읽지 않고 기록만 갱신하는 일**이 반복됐다.
+# 기록을 요구하는 것과 읽기를 요구하는 것은 다르다. 이 세션에서 실제로 나를 멈춰 세운 장치는
+# 판정 기록의 빈 칸 하나뿐이었으므로, 같은 방식을 문장 단위로 적용한다. 한 줄씩 채우는
+# 동안에는 그 문장을 읽을 수밖에 없다.
+"""
+
+
+def read_ledger(path, added):
+    """새 문장마다 '읽었다'를 받아 적게 한다. 비어 있으면 통과시키지 않는다."""
+    old = {}
+    if os.path.exists(path):
+        for ln in io.open(path, encoding='utf-8'):
+            m = re.match(r'\[([^\]]*)\]\s*(.*)$', ln.rstrip('\n'))
+            if m:
+                old[m.group(2)] = m.group(1).strip()
+    lines, blank = [], 0
+    for s in added:
+        key = re.sub(r'\s+', ' ', s)[:200]
+        v = old.get(key, '')
+        if not v:
+            blank += 1
+        lines.append(f'[{v or " "}] {key}')
+    io.open(path, 'w', encoding='utf-8').write(READ_HEAD + '\n' + '\n'.join(lines) + '\n')
+    return blank
 
 
 def run(script, args):
@@ -188,16 +218,22 @@ def main():
         if checked != len(HUNT_TYPES):
             fails.append(f'사냥 패스 유형 검사가 {checked}/{len(HUNT_TYPES)}개만 돌았습니다')
 
+    print('── 6. 통독 장부 (새로 쓴 문장을 한 줄씩 읽었는가)')
     added, allsents = new_sentences(note, snap)
-    if fresh:
-        # 이 빌드를 읽었다고 기록했으니 기준점을 옮긴다. 다음 수정부터 다시 센다.
+    ledger = os.path.join(src, 'hunt_read.txt')
+    blank = read_ledger(ledger, added)
+    print(f'   새로 쓰거나 고친 문장 {len(added)}개 · 아직 읽지 않은 것 {blank}개')
+    for s in added[:8]:
+        print(f'     · {s[:100]}')
+    if len(added) > 8:
+        print(f'     … 외 {len(added) - 8}개 — {ledger}')
+    if blank:
+        fails.append(f'통독하지 않은 문장이 {blank}개 남았습니다. {ledger}의 [ ]를 하나씩 '
+                     f'채우십시오 — 읽고 [읽음], 고쳤으면 [고침]')
+    elif fresh:
+        # 새 문장을 전부 읽었고 사냥 패스 기록도 이 빌드의 것이다. 기준점을 옮긴다.
         io.open(snap, 'w', encoding='utf-8').write('\n'.join(allsents))
-    elif added:
-        print(f'\n   지난 기록 이후 새로 쓴 문장 {len(added)}개 — 이것부터 읽으십시오')
-        for s in added[:12]:
-            print(f'     · {s[:104]}')
-        if len(added) > 12:
-            print(f'     … 외 {len(added) - 12}개')
+        io.open(ledger, 'w', encoding='utf-8').write(READ_HEAD)
 
     print('\nFAILS:', len(fails))
     for f in fails: print('  ✗', f)
