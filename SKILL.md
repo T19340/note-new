@@ -152,7 +152,10 @@ python ../gates/gate_deliver.py --draft p1.html
 - `assets/gates/` — `gate_struct.py`, `gate_numbers_template.py`, `render_check.py`,
   `audit_prep.py`, `texscan.py`, `korean_scan.py`(문체 검사 — HARD·판정·통계 세 층,
   제목·표 칸까지 본다), `check_content_style.py`(번역체·AI 결함을 하드/소프트로 구분),
-  `gate_deliver.py`(납품 게이트 — 위 셋과 사냥 패스 기록을 묶어서 본다), `itest-template.js`.
+  `gate_deliver.py`(납품 게이트 — 모든 검사와 사냥 패스 기록·통독 장부를 묶어서 본다.
+  `--draft`로 조각 하나만 검사한다), `gate_order.py`(읽는 순서),
+  `fix_control_chars.py`(헤어독이 먹은 백슬래시 복구 — 조각을 셸로 고친 직후 돌린다),
+  `itest-template.js`.
 - `assets/assemble.py`, `assets/note.example.json` — 조립기와 매니페스트 예시.
 - `assets/example/` — 위 자산만으로 조립되는 최소 노트 한 벌(조각·패널·spy·그림·데이터·수치
   게이트·용어 파일). `python ../assemble.py note.json`으로 그 자리에서 다시 조립된다.
