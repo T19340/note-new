@@ -11,7 +11,10 @@
   1. HARD   — 맥락과 무관하게 고쳐야 하는 것. 하나라도 남으면 종료코드 1.
   2. 판정   — 맥락상 정상인 경우가 많다. 세어서 보여 주기만 하고 통과시킨다.
               직역 자국(관사 '하나/한' · 다의어 고정 · 유정물 전용 말 · 영어 주어 ·
-              명사 겹싸기)과 번역투·비유가 여기 있다. **전량을 하나씩 읽고 판정해야 한다.**
+              명사 겹싸기)과 번역투·비유, 그리고 **문장의 수준**(제목을 되풀이한 첫 문장 ·
+              존재만 알리는 서술 · 한 문단 같은 낱말 세 번)이 여기 있다. 마지막 갈래는
+              표현이 틀려서가 아니라 **그 문장이 하는 일이 없어서** 걸린다.
+              **전량을 하나씩 읽고 판정해야 한다.**
   3. 통계   — 짧은 문장 연타 구간, 낱말 편중표.
 
 **이 검사를 통과해도 자연스러운 한국어라는 뜻은 아니다.** 정규식은 알려진 패턴만 잡는다.
@@ -104,7 +107,9 @@ JUDGE = [
         ('문장 전체가 이유절 — 앞 문장에 접어 넣는다', r'^[^.!?]{0,70}기?\s때문입니다\.?$'),
     ], r'사실상'),
 
-    ('빈 서술 — 존재만 알리는 문장', [
+    # 문장의 수준은 뜻이 맞는지와 별개로 본다(`content.md` 머리말). 뜻이 통하는 것은 최저
+    # 조건이지 합격선이 아니다. 여기 걸리는 것은 티가 나는 꼴뿐이고, 나머지는 사냥 패스 ⑫.
+    ('문장의 수준 — 하는 일이 없는 문장', [
         # "…를 다룹니다 / …문제가 있습니다"는 무엇이 어떻다는 내용이 없다. 그 내용을 바로 쓴다.
         ('"…를 다룹니다 / 알아봅니다" — 내용을 바로 쓴다',
          r'[을를]\s*(다룹니다|알아봅니다|살펴봅니다|짚어 봅니다|소개합니다)'),
@@ -197,22 +202,71 @@ def title_echo(html):
     t = re.search(r'(?is)<h1[^>]*>(.*?)</h1>', html)
     if not t:
         return []
-    title = {w for w in re.findall(r'[가-힣]{2,}', re.sub(r'<[^>]+>', ' ', t.group(1)))}
-    if not title:
-        return []
+    title = content_words(re.sub(r'<[^>]+>', ' ', t.group(1)))
     out = []
     for cls in ('subtitle', 'summary'):
-        m = re.search(r'(?is)class="[^"]*' + cls + r'[^"]*"[^>]*>(.*?)</(?:p|div)>', html)
+        m = re.search(r'(?is)class="[^"]*\b' + cls + r'\b[^"]*"[^>]*>(.*?)</(?:p|div)>', html)
         if not m:
             continue
         txt = re.sub(r'<[^>]+>', ' ', m.group(1))
         first = re.split(r'(?<=[.!?])\s', re.sub(r'\s+', ' ', txt).strip())[0]
-        fw = {w for w in re.findall(r'[가-힣]{2,}', first)}
-        if not fw:
-            continue
-        share = len(fw & title) / len(title)
-        if share >= 0.6:
+        share = echo_of(title, first)
+        if share is not None:
             out.append((cls, first[:70], share))
+    return out
+
+
+PART = re.compile(r'(으로|에서|에게|에는|이라|라는|하는|한다|합니다|입니다|이다|들이|들은|들을|'
+                  r'은|는|이|가|을|를|의|에|도|만|과|와|로|나|랑|께|야)$')
+
+
+def stem(w):
+    """조사를 떼어 낸 꼴로 견준다. '개수'와 '개수의'가 다른 말로 세어지면 검사가 눈을 감는다."""
+    prev = None
+    while prev != w:
+        prev, w = w, PART.sub('', w)
+    return w if len(w) >= 2 else prev
+
+
+def content_words(t):
+    return {w for w in (stem(x) for x in re.findall(r'[가-힣]{2,}', t))
+            if len(w) >= 2 and w not in STOP}
+
+
+def echo_of(hw, first, share_min=0.6, new_min=3):
+    """제목을 되풀이하면서 **새로 보태는 말이 없는** 첫 문장인가. 겹침 비율을 돌려준다.
+
+    제목의 낱말을 쓰는 것 자체는 정상이다 — 그것이 그 절의 주제어이기 때문이다. 겹침만 보면
+    잘 쓴 문장까지 걸린다(실측: "분포를 구할 수 없는 상황에서도 개수의 평균은 구할 수
+    있습니다"가 「개수의 평균」과 100% 겹쳐 잡혔다). 걸러야 할 것은 제목 말고는 말하는 것이
+    없는 문장이므로, 겹침과 함께 **제목 밖의 낱말이 몇 개인지**를 같이 본다."""
+    fw = content_words(first)
+    if not fw or not hw:
+        return None
+    share = len(fw & hw) / len(hw)
+    return share if share >= share_min and len(fw - hw) < new_min else None
+
+
+def heading_echo(blocks):
+    """절 제목을 말만 바꿔 되풀이한 첫 문장을 찾는다.
+
+    부제만의 버릇이 아니다. 절을 여는 한두 문장은 본문을 다 쓴 뒤에 채우는 칸이라, 제목을
+    다시 적어 놓고 넘어가기 쉽다. 제목을 읽은 독자는 그 문장에서 아무것도 얻지 못한다.
+    제목의 실질 낱말이 하나뿐이면 우연히 겹치므로 둘 이상일 때만 본다."""
+    out = []
+    for i, (kind, t) in enumerate(blocks):
+        if not kind.startswith('h'):
+            continue
+        hw = content_words(re.sub(r'^[\d.\s]+', '', t))
+        if len(hw) < 2:
+            continue
+        nxt = next((x for x in blocks[i + 1:] if x[0] in PROSE_KINDS), None)
+        if not nxt:
+            continue
+        ss = split_sents(nxt[1])
+        share = echo_of(hw, ss[0]) if ss else None
+        if share is not None:
+            out.append((t[:30], ss[0][:74], share))
     return out
 
 
@@ -298,16 +352,27 @@ def run(fn, judged):
     for r in runs[:3]:
         print('         · ' + ' / '.join(x[:34] for x in r[:3]))
 
+    LV = '문장의 수준 — 하는 일이 없는 문장'
     for cls, first, share in title_echo(raw):
-        judged.append(('빈 서술 — 존재만 알리는 문장', '첫 문장이 제목의 바꿔 말하기', first))
+        nj += 1
+        judged.append((LV, '첫 문장이 제목의 바꿔 말하기', first))
         print(f'     ▸ {cls}의 첫 문장이 제목과 낱말이 {share:.0%} 겹칩니다 — 제목이 이미 말한 것을 빼십시오')
         print(f'         «{first}»')
+    ech = heading_echo(blocks)
+    if ech:
+        print(f'     ▸ 절 제목을 되풀이한 첫 문장 — {len(ech)}건 (제목이 말하지 않은 것부터 씁니다)')
+        for head, first, share in ech:
+            nj += 1
+            judged.append((LV, f'절 제목 「{head}」을 되풀이', first))
+            print(f'         「{head}」 {share:.0%}  «{first}»')
     churn = word_churn(blocks)
     if churn:
         print(f'     ▸ 한 문단에 같은 낱말 3회 이상 — {len(churn)}건 (문장이 제자리를 도는 신호)')
         for w, n, t in churn[:3]:
-            judged.append(('빈 서술 — 존재만 알리는 문장', f"'{w}' {n}회 반복", t))
             print(f'         «{w}» {n}회  {t}')
+        for w, n, t in churn:
+            nj += 1
+            judged.append((LV, f"'{w}' {n}회 반복", t))
 
     chars, top = bias_table(sents)
     print(f'     낱말 편중표 (본문 한글 {chars:,}자) — 주제어가 아닌데 상위면 다의어 고정을 의심')
@@ -316,6 +381,34 @@ def run(fn, judged):
 
     print(f'  요약: HARD {nh}건 · 판정 {nj}건 · 연타 {len(runs)}구간')
     return nh
+
+
+SELFTEST = [
+    ('개수의 평균', '개수의 평균을 구하는 문제를 다룹니다.', True),
+    ('지시자 변수', '지시자 변수를 알아봅니다.', True),
+    ('개수의 평균', '분포를 구할 수 없는 상황에서도 개수의 평균은 구할 수 있습니다.', False),
+    ('비복원추출', '앞의 결과가 뒤의 확률을 바꾸는 상황입니다.', False),
+]
+
+
+def selftest():
+    """검사기가 살아 있는지 본다. 규칙이 조용히 죽는 일이 실제로 있었다 — 정규식의 경계
+    표시가 파일에 제어문자로 들어가 `title_echo`가 어떤 부제와도 매치하지 못한 채 두 번의
+    작업 동안 '통과'를 찍었다. **아무것도 못 잡은 것과 잡을 것이 없는 것이 같은 출력으로
+    보이면 게이트는 장식이다.** 알려진 결함과 알려진 정상을 넣어 그 둘을 갈라 놓는다."""
+    bad = 0
+    for head, first, want in SELFTEST:
+        got = bool(heading_echo([('h2', head), ('p', first)]))
+        if got != want:
+            bad += 1
+            print(f'  ✗ 「{head}」 «{first[:40]}» 잡힘={got} 기대={want}')
+    if not title_echo('<h1>제목 자리</h1><p class="subtitle">제목 자리를 다룹니다.</p>'):
+        bad += 1
+        print('  ✗ 부제 검사가 알려진 결함을 못 잡습니다 — 선택자나 정규식이 깨졌습니다')
+    if not any(re.search(p, '막힌 자리의 정체는 적분이었습니다') for p, _ in HARD):
+        bad += 1
+        print('  ✗ HARD 규칙이 알려진 결함을 못 잡습니다')
+    return bad
 
 
 TRIAGE_HEAD = """# 판정 기록 — 이 파일이 '판정 목록을 읽었다'는 증거다.
@@ -359,8 +452,12 @@ if __name__ == '__main__':
         tpath = sys.argv[i + 1] if len(sys.argv) > i + 1 else 'triage.txt'
         args = [a for a in args if a != tpath]
 
+    bad = selftest()
+    if bad:
+        print(f'자체 시험 실패 {bad}건 — 검사기가 깨졌습니다. 결과를 믿지 마십시오.\n')
+
     judged = []
-    bad = sum(run(f, judged) for f in args)
+    bad += sum(run(f, judged) for f in args)
 
     if tpath:
         blank, total = triage(tpath, judged)
